@@ -46,7 +46,7 @@ All of these can be switched off under `features:` in the settings.
 ## Setup
 
 ```bash
-git clone https://github.com/<you>/alpaca-llm-trader.git
+git clone https://github.com/TripWagnerClaudeCode/public-alpaca-llm-trader.git alpaca-llm-trader
 cd alpaca-llm-trader
 uv sync
 cp .env.example .env      # then fill it in (see below)
