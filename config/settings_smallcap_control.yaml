@@ -1,0 +1,93 @@
+# FROZEN v1 CONTROL for config/settings_smallcap.yaml (spec 2026-11-04, Phase 0). Same strategy, v1 prompts,
+# simulated book (no broker orders), every upgrade feature off. Do not add a features: block.
+# Keep universe/portfolio/risk/agents identical to config/settings_smallcap.yaml (tests/test_control_profile.py enforces it).
+# Profile B: small-cap momentum & catalyst bot (Alpaca paper account 2). Spec: docs/PROFILE_B_SMALLCAP.md
+# Run with:  uv run python -m bot.run_daily --profile smallcap --phase analyze --mode dry-run
+# Secrets live in .env, never here.
+profile: smallcap_control
+
+broker:
+  api_key_env: ALPACA_B_API_KEY       # separate paper account from bot A
+  secret_key_env: ALPACA_B_SECRET_KEY
+
+universe:
+  source: screener                    # weekly top 20 from scripts/screen.py (Sunday 20:00 ET)
+  screener_dir: data/universe/smallcap
+  max_age_days: 8                     # missing or older screener output blocks the run (fail closed)
+  benchmark: IWM                      # small-cap benchmark; still loaded for the regime analyst
+
+data:
+  history_days: 800
+  max_staleness_days: 4
+  news_per_symbol: 5
+
+kronos:
+  enabled: false                      # no evidence of skill (see settings.yaml); not used for B
+
+agents:
+  backend: claude-cli               # Claude subscription via headless `claude -p`; no API key, no per-token bill
+  # Same models as bot A; small-cap prompts.
+  analyst_model: claude-opus-5-5
+  analyst_effort: low
+  debate_model: claude-opus-5-5
+  debate_effort: medium
+  pm_model: claude-opus-5-5
+  pm_effort: high
+  debate_rounds: 1
+  max_daily_output_tokens: 150000
+  horizon_days: 10
+  max_abs_view_return: 0.20           # small caps move more; prompts require a dated catalyst beyond +/-15%
+  prompt_dir: prompts_smallcap_v1
+
+portfolio:
+  method: mean_risk
+  risk_measure: variance
+  tau: 0.10
+  max_weight: 0.12
+  min_cash_weight: 0.05
+  l2_coef: 0.0001
+  delta: 1.0                          # more aggressive tilts than A
+  lookback_days: 252
+
+risk:
+  max_position_weight: 0.12
+  max_gross_exposure: 0.95
+  max_orders_per_day: 20
+  max_daily_turnover: 0.50
+  min_order_notional: 25.0
+  max_daily_loss_pct: 0.06
+  max_drawdown_pct: 0.25
+  kill_switch_file: KILL_SWITCH_SMALLCAP_CONTROL
+  stop_loss_pct: 0.15                 # unrealized P&L <= -15% vs avg entry -> exit at next execute
+  stop_cooldown_days: 10              # re-entry blocked for 10 trading days
+  max_adv_participation: 0.02         # order notional <= 2% of 20-day avg dollar volume
+  max_spread_pct: 0.015               # stage 2: skip buys when spread > 1.5% of mid
+
+execution:
+  mode: control
+  require_approval: false
+  live_auto_execute: false
+  order_type: market
+  order_style: auto                   # fractional notional if fractionable, else whole-share marketable limit
+  limit_buffer_pct: 0.005
+  limit_fractional_buys: true         # every buy is a marketable limit (security review finding 003)
+  record_quotes: true                 # stage 2: quotes at execute, modeled costs at reconcile
+  default_spread_pct: 0.003           # cost model spread when a fill has no stored quote (flagged)
+
+paths:
+  cache_dir: data/cache               # bar cache shared with A
+  journal_db: data/journal_smallcap_control.db
+  reports_dir: reports/smallcap_control
+
+notify:
+  email: false
+  modes: [paper, live]
+  phases: [analyze, execute, reconcile]
+
+radar:
+  enabled: false                      # shadow-only; off so the control never writes radar.db
+  db_path: data/radar.db
+
+control:
+  book_path: data/book_smallcap_control.json
+  starting_cash: 100000.0

@@ -1,0 +1,39 @@
+[project]
+name = "alpaca-llm-trader"
+version = "0.1.0"
+description = "Daily swing-trading bot: Claude agent views, skfolio sizing, hard risk limits, Alpaca execution (paper by default)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "openbb>=4.4",
+    "openbb-yfinance",
+    "alpaca-py>=0.40",
+    "skfolio>=0.10",
+    "anthropic>=0.60",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "pandas>=2.2,<2.3",
+    "numpy",
+    "pyarrow",
+    "torch>=2.2",
+    "einops==0.8.1",
+    "huggingface_hub>=0.33",
+    "safetensors>=0.6",
+    "tqdm",
+    "feedparser>=6.0",
+    "httpx>=0.27",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-mock"]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "bot"   # the import package stays `bot`
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

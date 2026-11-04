@@ -1,0 +1,99 @@
+# News/chatter radar (shadow mode; spec: docs/PROFILE_B_SMALLCAP.md "News radar").
+# Collector: uv run python scripts/radar_collect.py   (Task Scheduler "TradingBot-Radar", every 30 min)
+# Features:  uv run python scripts/radar_features.py --as-of YYYY-MM-DD
+# No LLM is called anywhere (numeric features only).
+
+db_path: data/radar.db
+names_cache: data/cache/radar_names.json
+names_max_age_days: 7
+settings_path: config/settings.yaml        # profile A symbols
+universe_dir: data/universe/smallcap       # newest YYYY-MM-DD.json ("symbols") = small-cap universe
+user_agent: trading-bot-radar/0.1
+http_timeout_seconds: 12
+max_runtime_seconds: 150                   # whole run budget; sources past it are skipped
+lookback_hours: 48                         # ask each source for posts newer than this (dedupe handles overlap)
+max_symbols_per_post: 6                    # posts matching more symbols are roundups/lists: dropped
+
+features:
+  window_hours: 24
+  baseline_days: 30
+  min_baseline_days: 14                    # mention_z = null until 14 covered baseline days exist
+  std_floor: 1.0
+  require_live_coverage: true              # a baseline day counts only if a collector run happened in it
+  fringe_min_sources: 3
+  default_freeze_et: "17:15"
+
+# Request caps are per collector run. Round-robin cursors spread the universe over successive runs.
+sources:
+  google_news:                              # mainstream baseline
+    enabled: true
+    max_requests: 20                        # 46 symbols / 2 = 23 queries: full cycle every 2 runs
+    batch_size: 2                           # results cap at 100 per query, so keep batches small
+    pause_seconds: 1.0
+  hn:
+    enabled: true
+    max_requests: 12                        # one query per symbol (Algolia ANDs words, no OR batching)
+    pause_seconds: 0.5
+  substack:
+    enabled: true
+    min_interval_minutes: 120
+    pause_seconds: 1.0
+    max_requests: 10
+    feeds:
+      - https://thebearcave.substack.com/feed              # The Bear Cave (short reports, small caps)
+      - https://www.yetanothervalueblog.com/feed           # Yet Another Value Blog (small/mid caps)
+      - https://specialsituationinvesting.substack.com/feed
+      - https://thescienceofhitting.com/feed
+      - https://www.netinterest.co/feed                    # Net Interest (financials)
+      - https://www.fabricatedknowledge.com/feed           # semis
+      - https://kyla.substack.com/feed
+  gdelt:
+    enabled: true
+    max_requests: 1                         # GDELT 429s on back-to-back requests (even 15 s apart): 1 per run
+    batch_size: 16                          # 46 symbols -> 3 batches, cycled across runs
+    pause_seconds: 20
+    min_interval_minutes: 25
+  bluesky:                                  # only runs when BSKY_HANDLE and BSKY_APP_PASSWORD are set in .env
+    enabled: true
+    max_requests: 10
+    pause_seconds: 1.0
+  youtube:                                  # stub (TODO): transcripts via yt-dlp
+    enabled: false
+
+# GDELT articles from these domains (and subdomains) count as mainstream. Google News is always mainstream.
+mainstream_domains: [reuters.com, bloomberg.com, wsj.com, ft.com, cnbc.com, marketwatch.com, barrons.com,
+  nytimes.com, washingtonpost.com, apnews.com, bbc.co.uk, bbc.com, cnn.com, foxbusiness.com, forbes.com,
+  businessinsider.com, finance.yahoo.com, yahoo.com, fortune.com, theguardian.com, economist.com,
+  investors.com, morningstar.com, fool.com, seekingalpha.com, thestreet.com, zacks.com, benzinga.com,
+  nasdaq.com, axios.com, theverge.com, techcrunch.com, latimes.com, usatoday.com, npr.org, cbsnews.com,
+  nbcnews.com, abcnews.go.com, investopedia.com, kiplinger.com, globenewswire.com, prnewswire.com,
+  businesswire.com, accesswire.com]
+
+# Extra names per symbol (added to the normalized Alpaca/yfinance name). Aliases are trusted, while
+# auto-derived single-word names ("Bandwidth", "Manitowoc") need a finance word nearby; everyday words in
+# the ambiguous list (Apple, Visa, Meta, Alphabet, Amazon, ...) need one even as aliases.
+aliases:
+  NVDA: [Nvidia]
+  MSFT: [Microsoft]
+  NFLX: [Netflix]
+  AAPL: [Apple]
+  AMZN: [Amazon]
+  JNJ: [Johnson & Johnson]
+  GOOGL: [Google, Alphabet]
+  META: [Meta]
+  XOM: [Exxon Mobil, Exxon]
+  JPM: [JPMorgan, J.P. Morgan]
+  LLY: [Eli Lilly]
+  COST: [Costco]
+  HD: [Home Depot]
+  PG: [Procter & Gamble]
+  UNH: [UnitedHealth, UnitedHealthcare]
+  AVGO: [Broadcom]
+  WMT: [Walmart]
+  MA: [Mastercard]
+  QQQ: [Invesco QQQ]
+
+junk_origins: [stocktradersdaily.com]      # auto-generated "setup / rotational strategy" pages
+junk_title_patterns: []  # extra case-insensitive title regexes, added to collect.JUNK_TITLES
+ambiguous_names: []      # extra single-word names that need a finance context word
+stoplist_extra: []       # extra uppercase words never treated as bare tickers

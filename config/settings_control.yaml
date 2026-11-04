@@ -1,0 +1,88 @@
+# FROZEN v1 CONTROL for config/settings.yaml (spec 2026-11-04, Phase 0). Same strategy, v1 prompts,
+# simulated book (no broker orders), every upgrade feature off. Do not add a features: block.
+# Keep universe/portfolio/risk/agents identical to config/settings.yaml (tests/test_control_profile.py enforces it).
+profile: control
+# Trading bot configuration. Secrets live in .env, never here.
+
+universe:
+  # Liquid large-caps and sector ETFs. Every symbol here must also be tradable on Alpaca.
+  symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, AVGO, JPM, V, UNH,
+            XOM, LLY, COST, HD, PG, JNJ, WMT, MA, NFLX, AMD,
+            QQQ, XLE, XLF, XLV, TLT, GLD]
+  benchmark: SPY
+
+data:
+  history_days: 800          # calendar days of daily bars to pull
+  max_staleness_days: 4      # fail closed if the latest bar is older than this (covers weekends/holidays)
+  news_per_symbol: 5
+
+kronos:
+  # Disabled 2026-10-31: scripts/eval_kronos.py showed no predictive skill on this universe
+  # (mean rank IC -0.03 / 0.00 / +0.02 at lookback 120/250/400, all t < 1, 57 weekly dates
+  # Sep 2025-Sep 2026). Re-run the eval before re-enabling.
+  enabled: false
+  model: NeoQuasar/Kronos-small
+  tokenizer: NeoQuasar/Kronos-Tokenizer-base
+  lookback: 400              # daily bars fed in (max 512)
+  pred_len: 10               # trading days forecast
+  sample_count: 8
+  device: cpu
+
+agents:
+  prompt_dir: prompts_v1
+  backend: claude-cli               # Claude subscription via headless `claude -p`; no API key, no per-token bill
+  # All agents default to Claude Opus 5.5. Analysts run at low effort to keep cost down.
+  # To cut cost further, set analyst_model to claude-haiku-5-5.
+  analyst_model: claude-opus-5-5
+  analyst_effort: low
+  debate_model: claude-opus-5-5
+  debate_effort: medium
+  pm_model: claude-opus-5-5
+  pm_effort: high
+  debate_rounds: 1
+  max_daily_output_tokens: 150000   # hard budget across all agent calls in one run
+  horizon_days: 10                  # holding horizon the views refer to
+  max_abs_view_return: 0.08         # reject any view claiming more than +/-8% over the horizon
+
+portfolio:
+  method: mean_risk          # mean_risk (Black-Litterman views) or hrp (baseline, ignores views)
+  risk_measure: variance     # variance | cvar
+  tau: 0.05
+  max_weight: 0.15
+  min_cash_weight: 0.05
+  l2_coef: 0.0005           # diversification penalty (higher = more spread out)
+  delta: 2.5                # equilibrium risk aversion
+  lookback_days: 504         # days of returns used for covariance
+
+risk:
+  max_position_weight: 0.15
+  max_gross_exposure: 0.95
+  max_orders_per_day: 20
+  max_daily_turnover: 0.40       # sum |delta weight| per run
+  min_order_notional: 5.0        # skip trades smaller than $5
+  max_daily_loss_pct: 0.03       # vs previous close equity -> kill switch
+  max_drawdown_pct: 0.15         # vs peak equity in journal -> kill switch
+  kill_switch_file: KILL_SWITCH_CONTROL
+
+execution:
+  mode: control
+  require_approval: false    # true => print order plan and wait for 'yes' before submitting
+  live_auto_execute: false   # live mode asks for approval on every run until this is true (go-live gate)
+  order_type: market         # legacy field; order_style decides
+  order_style: auto          # whole-share limits for non-fractionable names (none in A's universe)
+  limit_buffer_pct: 0.005
+  limit_fractional_buys: true   # buys as fractional marketable limits (ask+0.5%); sells and exits stay market
+
+paths:
+  cache_dir: data/cache
+  journal_db: data/journal_control.db
+  reports_dir: reports/control
+
+notify:
+  email: false
+  modes: [paper, live]       # dry-run never emails
+  phases: [analyze, execute, reconcile]   # remove phases to get fewer emails; errors/blocked always email
+
+control:
+  book_path: data/book_control.json
+  starting_cash: 100000.0
